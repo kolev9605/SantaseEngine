@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/Santase.UnitTests/Santase.UnitTests.csproj" />
+  </Folder>
+
+  <Folder Name="/src/">
+    <Project Path="src/Santase.Console/Santase.Console.csproj" />
+    <Project Path="src/Santase.Engine/Santase.Engine.csproj" />
+  </Folder>
+</Solution>
