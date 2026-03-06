@@ -2,7 +2,7 @@ namespace Santase.Engine;
 
 public static class CardRules
 {
-    public static int GetPointValue(Rank rank) => rank switch
+    public static int GetPointValue(this Rank rank) => rank switch
     {
         Rank.Ace => 11,
         Rank.Ten => 10,
@@ -12,7 +12,7 @@ public static class CardRules
         _ => 0
     };
 
-    public static int GetPower(Rank rank) => rank switch
+    public static int GetPower(this Rank rank) => rank switch
     {
         Rank.Ace => 6,
         Rank.Ten => 5,

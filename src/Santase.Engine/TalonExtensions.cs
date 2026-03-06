@@ -1,6 +1,6 @@
 namespace Santase.Engine;
 
-static class RandomExtensions
+static class TalonExtensions
 {
     public static void Shuffle(this List<Card> array, Random rng)
     {
