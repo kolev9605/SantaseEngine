@@ -8,7 +8,7 @@ public class GameState
         PlayerOneHand = Talon.Draw(GameConstants.PlayerInitialHandSize);
         PlayerTwoHand = Talon.Draw(GameConstants.PlayerInitialHandSize);
 
-        TrumpCard = Talon.DrawOne() ?? throw new ArgumentNullException("First card can't be null");
+        TrumpCard = Talon.DrawOne()!;
         TrumpSuit = TrumpCard.Suit;
 
         PlayerTurn = 0;
@@ -22,7 +22,7 @@ public class GameState
     public Talon Talon { get; init; }
 
     public Suit TrumpSuit { get; init; }
-    public Card? TrumpCard { get; init; }
+    public Card? TrumpCard { get; set; }
 
     public List<Card> CurrentTrick { get; init; } = new();
 

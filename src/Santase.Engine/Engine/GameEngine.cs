@@ -19,9 +19,17 @@ public class GameEngine
         // Check win condition
         // Switch player
         // ValidateMove(move);
-
-
         var newState = gameState.Clone();
+        if (move is null)
+        {
+            return new GameResult(
+                newState,
+                trickCompleted: false,
+                gameEnded: true,
+                winner: 0
+            );
+        }
+
         CurrentState = newState;
 
         newState.CurrentTrick.Add(move.Card);
@@ -47,15 +55,27 @@ public class GameEngine
         // 5. Switch Player
         if (newState.CurrentTrick.Count == 2)
         {
-            if (newState.Talon.Cards.Any())
+            if (newState.Talon.Cards.Any() && newState.TrumpCard is not null)
             {
                 var cardDrawn = newState.Talon.DrawOne();
+                if (cardDrawn is null)
+                {
+                    cardDrawn = newState.TrumpCard;
+                    newState.TrumpCard = null;
+                }
+
                 if (cardDrawn is not null)
                 {
                     newState.PlayerOneHand.Add(cardDrawn);
                 }
 
                 var secondCardDrawn = newState.Talon.DrawOne();
+                if (secondCardDrawn is null)
+                {
+                    secondCardDrawn = newState.TrumpCard;
+                    newState.TrumpCard = null;
+                }
+
                 if (secondCardDrawn is not null)
                 {
                     newState.PlayerTwoHand.Add(secondCardDrawn);
