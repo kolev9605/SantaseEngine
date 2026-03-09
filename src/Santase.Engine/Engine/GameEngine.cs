@@ -30,11 +30,11 @@ public class GameEngine
             );
         }
 
+        // Assign the cloned state to the engine
         CurrentState = newState;
+        newState.IsClosed = move.CloseGame || newState.IsClosed;
 
         newState.CurrentTrick.Add(move.Card);
-
-        newState.IsClosed = move.CloseGame || newState.IsClosed;
 
         if (newState.PlayerTurn == 0)
         {
