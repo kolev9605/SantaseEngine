@@ -43,6 +43,16 @@ public class GameState
         PlayerTurn = PlayerTurn == 1 ? 0 : 1;
     }
 
+    public void SetPlayerTurn(int playerTurn)
+    {
+        if (playerTurn is not 0 and not 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(playerTurn), "Player turn must be 0 or 1.");
+        }
+
+        PlayerTurn = playerTurn;
+    }
+
     public string GetStateString()
     {
         return $"Player 1 hand: {string.Join(", ", PlayerOneHand.Select(c => c.CardId))}\n" +
@@ -61,6 +71,8 @@ public class GameState
         {
             PlayerOneHand = [.. PlayerOneHand],
             PlayerTwoHand = [.. PlayerTwoHand],
+            PlayerOnePlayedCards = [.. PlayerOnePlayedCards],
+            PlayerTwoPlayedCards = [.. PlayerTwoPlayedCards],
             Talon = new Talon { Cards = [.. Talon.Cards] },
             TrumpSuit = TrumpSuit,
             TrumpCard = TrumpCard,
