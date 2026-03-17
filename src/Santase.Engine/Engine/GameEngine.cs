@@ -11,14 +11,14 @@ public class GameEngine
 
     public GameResult ApplyMove(Move move, GameState gameState)
     {
-        //Validate move
+        // Validate move
         // Apply move
         // If trick complete → resolve trick
         // Draw cards (if open phase)
         // Update scores
         // Check win condition
         // Switch player
-        // ValidateMove(move);
+        ValidateMove(move);
         var newState = gameState.Clone();
         if (move is null)
         {
@@ -53,6 +53,7 @@ public class GameEngine
         // 3. Update points
         // 4. Draw Cards
         // 5. Switch Player
+        var trickCompleted = false;
         if (newState.CurrentTrick.Count == 2)
         {
             if (newState.Talon.Cards.Any() && newState.TrumpCard is not null)
@@ -86,6 +87,8 @@ public class GameEngine
             var winnerOfTheTrick = EvaluateTrick(newState);
             newState.SetPlayerTurn(winnerOfTheTrick);
 
+            trickCompleted = true;
+
             newState.CurrentTrick.Clear();
         }
         else
@@ -97,57 +100,79 @@ public class GameEngine
         var winner = gameEnded ? (newState.PlayerOnePoints >= 66 ? 0 : 1) : (int?)null;
         return new GameResult(
             newState,
-            trickCompleted: newState.CurrentTrick.Count == 2,
+            trickCompleted: trickCompleted,
             gameEnded: gameEnded,
             winner: winner
         );
     }
 
+    private void ValidateMove(Move move)
+    {
+        var legalMoves = GetLegalMoves(CurrentState);
+        if (!legalMoves.Any(m => m.Card == move.Card))
+        {
+            throw new InvalidOperationException($"The move {move.Card} is not legal");
+        }
+    }
+
     private int EvaluateTrick(GameState gameState)
     {
-        var firstCard = gameState.CurrentTrick[0];
-        var secondCard = gameState.CurrentTrick[1];
-        var firstCardValue = firstCard.Type.GetPower();
-        var secondCardValue = secondCard.Type.GetPower();
+        var leadCard = gameState.CurrentTrick[0];
+        var replyCard = gameState.CurrentTrick[1];
+        var leadCardValue = leadCard.Type.GetPower();
+        var replyCardValue = replyCard.Type.GetPower();
+        var leadPlayer = gameState.PlayerTurn == 0 ? 1 : 0;
+        var replyPlayer = gameState.PlayerTurn;
 
-        int winner = -1;
+        var leadWinning = false;
         // Same Suit evaluate by power,
         // Assume that firstCard is one played first
-        if (firstCard.Suit == secondCard.Suit)
+        if (leadCard.Suit == replyCard.Suit)
         {
-            if (firstCardValue > secondCardValue)
-            {
-                gameState.PlayerOnePoints += firstCard.Type.GetPointValue() + secondCard.Type.GetPointValue();
-                winner = 0;
-            }
-            else
-            {
-                gameState.PlayerTwoPoints += firstCard.Type.GetPointValue() + secondCard.Type.GetPointValue();
-                winner = 1;
-            }
+            leadWinning = leadCardValue > replyCardValue;
         }
         else
         {
             // Different suit, check if second card is trump
-            if (secondCard.Suit == gameState.TrumpSuit && firstCard.Suit != gameState.TrumpSuit)
+            if (replyCard.Suit == gameState.TrumpSuit && leadCard.Suit != gameState.TrumpSuit)
             {
-                gameState.PlayerTwoPoints += firstCard.Type.GetPointValue() + secondCard.Type.GetPointValue();
-                winner = 1;
+                leadWinning = false;
             }
-            else if (firstCard.Suit == gameState.TrumpSuit && secondCard.Suit != gameState.TrumpSuit)
+            else if (leadCard.Suit == gameState.TrumpSuit && replyCard.Suit != gameState.TrumpSuit)
             {
-                gameState.PlayerOnePoints += firstCard.Type.GetPointValue() + secondCard.Type.GetPointValue();
-                winner = 0;
+                leadWinning = true;
             }
-            // If none of the played cards are trump, the first player wins the trick
-            else if (firstCard.Suit != gameState.TrumpSuit && secondCard.Suit != gameState.TrumpSuit)
+            // If none of the played cards are trump, the lead player wins the trick
+            else if (leadCard.Suit != gameState.TrumpSuit && replyCard.Suit != gameState.TrumpSuit)
             {
-                gameState.PlayerOnePoints += firstCard.Type.GetPointValue() + secondCard.Type.GetPointValue();
-                winner = 0;
+                leadWinning = true;
             }
         }
 
-        return winner;
+        if (leadWinning)
+        {
+            if (leadPlayer == 0)
+            {
+                gameState.PlayerOnePoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
+            }
+            else
+            {
+                gameState.PlayerTwoPoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
+            }
+        }
+        else
+        {
+            if (leadPlayer == 0)
+            {
+                gameState.PlayerTwoPoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
+            }
+            else
+            {
+                gameState.PlayerOnePoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
+            }
+        }
+
+        return leadWinning ? leadPlayer : replyPlayer;
     }
 
     public IEnumerable<Move> GetLegalMoves(GameState gameState)
@@ -159,7 +184,9 @@ public class GameEngine
         {
             if (gameState.IsClosed || gameState.TalonExhausted)
             {
-                legalMoves = legalMoves.Where(c => c.Suit == gameState.CurrentTrick.FirstOrDefault()!.Suit).ToList();
+                legalMoves = legalMoves
+                    .Where(c => c.Suit == gameState.CurrentTrick.FirstOrDefault()!.Suit || c.Suit == gameState.TrumpSuit)
+                    .ToList();
             }
         }
 
