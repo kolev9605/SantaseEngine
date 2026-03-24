@@ -1,5 +1,8 @@
 {
     "cSpell.words": [
         "Santase"
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "dotnet test": true
+    }
 }

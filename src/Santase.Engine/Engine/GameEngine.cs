@@ -2,6 +2,9 @@ namespace Santase.Engine.Engine;
 
 public class GameEngine
 {
+    private const int TrumpMarriagePoints = 40;
+    private const int NonTrumpMarriagePoints = 20;
+
     public GameEngine()
     {
         CurrentState = new GameState();
@@ -18,21 +21,25 @@ public class GameEngine
         // Update scores
         // Check win condition
         // Switch player
-        ValidateMove(move);
-        var newState = gameState.Clone();
         if (move is null)
         {
+            var nullMoveState = gameState.Clone();
             return new GameResult(
-                newState,
+                nullMoveState,
                 trickCompleted: false,
                 gameEnded: true,
                 winner: 0
             );
         }
 
+        ValidateMove(move, gameState);
+        var newState = gameState.Clone();
+
         // Assign the cloned state to the engine
         CurrentState = newState;
         newState.IsClosed = move.CloseGame || newState.IsClosed;
+
+        ApplyMarriageDeclaration(move, newState);
 
         newState.CurrentTrick.Add(move.Card);
 
@@ -106,12 +113,80 @@ public class GameEngine
         );
     }
 
-    private void ValidateMove(Move move)
+    private void ValidateMove(Move move, GameState gameState)
     {
-        var legalMoves = GetLegalMoves(CurrentState);
-        if (!legalMoves.Any(m => m.Card == move.Card))
+        var legalMoves = GetLegalMoves(gameState);
+        if (!legalMoves.Any(m => m.Card == move.Card && m.DeclareMarriage == move.DeclareMarriage && m.CloseGame == move.CloseGame))
         {
-            throw new InvalidOperationException($"The move {move.Card} is not legal");
+            throw new InvalidOperationException($"The move {move} is not legal");
+        }
+    }
+
+    private static bool IsMarriageCard(Card card)
+    {
+        return card.Type is Rank.Queen or Rank.King;
+    }
+
+    private static Rank GetMarriagePairRank(Rank rank)
+    {
+        return rank switch
+        {
+            Rank.Queen => Rank.King,
+            Rank.King => Rank.Queen,
+            _ => throw new InvalidOperationException("Only Queen and King can form a marriage.")
+        };
+    }
+
+    private static bool HasMarriagePair(Card playedCard, List<Card> hand)
+    {
+        if (!IsMarriageCard(playedCard))
+        {
+            return false;
+        }
+
+        var pairRank = GetMarriagePairRank(playedCard.Type);
+        return hand.Any(c => c.Suit == playedCard.Suit && c.Type == pairRank);
+    }
+
+    private void ApplyMarriageDeclaration(Move move, GameState gameState)
+    {
+        if (!move.DeclareMarriage)
+        {
+            return;
+        }
+
+        if (gameState.CurrentTrick.Count != 0)
+        {
+            throw new InvalidOperationException("Marriage can only be declared when leading the trick.");
+        }
+
+        if (!IsMarriageCard(move.Card))
+        {
+            throw new InvalidOperationException("Marriage can only be declared with a Queen or King.");
+        }
+
+        var isPlayerOne = gameState.PlayerTurn == 0;
+        var hand = isPlayerOne ? gameState.PlayerOneHand : gameState.PlayerTwoHand;
+        var declaredMarriages = isPlayerOne ? gameState.PlayerOneDeclaredMarriages : gameState.PlayerTwoDeclaredMarriages;
+
+        if (!HasMarriagePair(move.Card, hand))
+        {
+            throw new InvalidOperationException("The corresponding marriage card is not in hand.");
+        }
+
+        if (!declaredMarriages.Add(move.Card.Suit))
+        {
+            throw new InvalidOperationException("This marriage suit has already been declared.");
+        }
+
+        var marriagePoints = move.Card.Suit == gameState.TrumpSuit ? TrumpMarriagePoints : NonTrumpMarriagePoints;
+        if (isPlayerOne)
+        {
+            gameState.PlayerOnePoints += marriagePoints;
+        }
+        else
+        {
+            gameState.PlayerTwoPoints += marriagePoints;
         }
     }
 
@@ -149,58 +224,70 @@ public class GameEngine
             }
         }
 
-        if (leadWinning)
+        var winner = leadWinning ? leadPlayer : replyPlayer;
+        var trickPoints = leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
+
+        if (winner == 0)
         {
-            if (leadPlayer == 0)
-            {
-                gameState.PlayerOnePoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
-            }
-            else
-            {
-                gameState.PlayerTwoPoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
-            }
+            gameState.PlayerOnePoints += trickPoints;
         }
         else
         {
-            if (leadPlayer == 0)
-            {
-                gameState.PlayerTwoPoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
-            }
-            else
-            {
-                gameState.PlayerOnePoints += leadCard.Type.GetPointValue() + replyCard.Type.GetPointValue();
-            }
+            gameState.PlayerTwoPoints += trickPoints;
         }
 
-        return leadWinning ? leadPlayer : replyPlayer;
+        return winner;
     }
 
     public IEnumerable<Move> GetLegalMoves(GameState gameState)
     {
-        var legalMoves = gameState.PlayerTurn == 0 ? gameState.PlayerOneHand : gameState.PlayerTwoHand;
+        var legalCards = gameState.PlayerTurn == 0 ? gameState.PlayerOneHand : gameState.PlayerTwoHand;
 
         // Card played
         if (gameState.CurrentTrick.Count == 1)
         {
             if (gameState.IsClosed || gameState.TalonExhausted)
             {
-                legalMoves = legalMoves
+                legalCards = legalCards
                     .Where(c => c.Suit == gameState.CurrentTrick.FirstOrDefault()!.Suit || c.Suit == gameState.TrumpSuit)
                     .ToList();
             }
         }
 
-        bool canClose = !gameState.IsClosed && (gameState.Talon.Cards.Count < GameConstants.TotalCardsCount || gameState.Talon.Cards.Count > 2);
-        bool canDeclareMarriage = gameState.Talon.Cards.Count < GameConstants.TotalCardsCount;
-        var x = legalMoves
-            .Where(m => m.Type == Rank.Queen || m.Type == Rank.King)
-            .GroupBy(c => c.Suit)
-            .ToDictionary(c => c.Key, c => c.ToList())
-            .Where(g => g.Value.Count == 2);
-
-        return legalMoves
+        var isLeading = gameState.CurrentTrick.Count == 0;
+        var cardsPlayedCount = gameState.PlayerOnePlayedCards.Count + gameState.PlayerTwoPlayedCards.Count;
+        var canClose = isLeading && !gameState.IsClosed && cardsPlayedCount > 0;
+        var canDeclareMarriage = isLeading;
+        var declaredMarriages = gameState.PlayerTurn == 0 ? gameState.PlayerOneDeclaredMarriages : gameState.PlayerTwoDeclaredMarriages;
+        var sortedCards = legalCards
             .OrderBy(c => c.Suit)
             .ThenBy(c => c.Type.GetPower())
-            .Select(c => new Move(c, false, canClose));
+            .ToList();
+
+        var legalMoves = new List<Move>();
+        foreach (var card in sortedCards)
+        {
+            legalMoves.Add(new Move(card, declareMarriage: false, closeGame: false));
+
+            var canDeclareForCard = canDeclareMarriage
+                && !declaredMarriages.Contains(card.Suit)
+                && HasMarriagePair(card, sortedCards);
+            if (canDeclareForCard)
+            {
+                legalMoves.Add(new Move(card, declareMarriage: true, closeGame: false));
+            }
+
+            if (canClose)
+            {
+                legalMoves.Add(new Move(card, declareMarriage: false, closeGame: true));
+
+                if (canDeclareForCard)
+                {
+                    legalMoves.Add(new Move(card, declareMarriage: true, closeGame: true));
+                }
+            }
+        }
+
+        return legalMoves;
     }
 }

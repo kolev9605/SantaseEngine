@@ -77,7 +77,8 @@ public class GameEngineRulesTests
         state.SetPlayerTurn(1);
 
         var followSuitCard = new Card { Suit = Suit.Spades, Type = Rank.Nine };
-        var illegalOffSuitCard = new Card { Suit = Suit.Hearts, Type = Rank.King };
+        var illegalSuit = Enum.GetValues<Suit>().First(s => s != Suit.Spades && s != state.TrumpSuit);
+        var illegalOffSuitCard = new Card { Suit = illegalSuit, Type = Rank.King };
         state.PlayerTwoHand.Add(followSuitCard);
         state.PlayerTwoHand.Add(illegalOffSuitCard);
 
@@ -122,7 +123,7 @@ public class GameEngineRulesTests
         Assert.Equal(0, secondResult.State.PlayerOnePoints);
     }
     [Fact]
-    public void ApplyMarriageMove_ShouldPlayAutomaticallyTheMarriage()
+    public void GetLegalMoves_LeadingWithMarriagePair_ShouldIncludeDeclareMarriageVariants()
     {
         var engine = new GameEngine();
         var state = engine.CurrentState;
@@ -132,25 +133,152 @@ public class GameEngineRulesTests
         state.CurrentTrick.Clear();
         state.SetPlayerTurn(0);
 
-        var nonTrumpSuit = Enum.GetValues<Suit>().First(s => s != state.TrumpSuit);
-        var queen = new Card { Suit = nonTrumpSuit, Type = Rank.Queen };
-        var king = new Card { Suit = nonTrumpSuit, Type = Rank.King };
+        var suit = Enum.GetValues<Suit>().First(s => s != state.TrumpSuit);
+        var queen = new Card { Suit = suit, Type = Rank.Queen };
+        var king = new Card { Suit = suit, Type = Rank.King };
         state.PlayerOneHand.Add(queen);
         state.PlayerOneHand.Add(king);
 
-        var randomCard = new Card { Suit = nonTrumpSuit, Type = Rank.Nine };
-        state.PlayerTwoHand.Add(randomCard);
+        var legalMoves = engine.GetLegalMoves(state).ToList();
+
+        Assert.Contains(legalMoves, m => m.Card == queen && m.DeclareMarriage);
+        Assert.Contains(legalMoves, m => m.Card == king && m.DeclareMarriage);
+    }
+
+    [Fact]
+    public void ApplyMove_DeclareMarriageThenLoseTrick_ShouldKeepMarriagePointsAwarded()
+    {
+        var engine = new GameEngine();
+        var state = engine.CurrentState;
+
+        state.PlayerOneHand.Clear();
+        state.PlayerTwoHand.Clear();
+        state.CurrentTrick.Clear();
+        state.SetPlayerTurn(0);
+
+        var suit = Enum.GetValues<Suit>().First(s => s != state.TrumpSuit);
+        var queen = new Card { Suit = suit, Type = Rank.Queen };
+        var king = new Card { Suit = suit, Type = Rank.King };
+        var opponentCard = new Card { Suit = suit, Type = Rank.Ace };
+
+        state.PlayerOneHand.Add(queen);
+        state.PlayerOneHand.Add(king);
+        state.PlayerTwoHand.Add(opponentCard);
+
+        var marriageMove = engine
+            .GetLegalMoves(state)
+            .First(m => m.Card == queen && m.DeclareMarriage && !m.CloseGame);
+
+        var afterLead = engine.ApplyMove(marriageMove, state);
+        var afterReply = engine.ApplyMove(new Move(opponentCard), afterLead.State);
+
+        Assert.True(afterReply.TrickCompleted);
+        Assert.Equal(20, afterReply.State.PlayerOnePoints);
+        Assert.Equal(14, afterReply.State.PlayerTwoPoints);
+    }
+
+    [Fact]
+    public void ApplyMove_DeclareMarriageThenWinFirstTrick_ShouldKeepMarriagePointsAndAddTrickPoints()
+    {
+        var engine = new GameEngine();
+        var state = engine.CurrentState;
+
+        state.PlayerOneHand.Clear();
+        state.PlayerTwoHand.Clear();
+        state.CurrentTrick.Clear();
+        state.PlayerOnePoints = 0;
+        state.PlayerTwoPoints = 0;
+        state.SetPlayerTurn(0);
+
+        var suit = Enum.GetValues<Suit>().First(s => s != state.TrumpSuit);
+        var queen = new Card { Suit = suit, Type = Rank.Queen };
+        var king = new Card { Suit = suit, Type = Rank.King };
+        var opponentReply = new Card { Suit = suit, Type = Rank.Nine };
+
+        state.PlayerOneHand.Add(queen);
+        state.PlayerOneHand.Add(king);
+        state.PlayerTwoHand.Add(opponentReply);
+
+        var marriageMove = engine
+            .GetLegalMoves(state)
+            .First(m => m.Card == king && m.DeclareMarriage && !m.CloseGame);
+
+        var afterLead = engine.ApplyMove(marriageMove, state);
+        Assert.Equal(20, afterLead.State.PlayerOnePoints);
+
+        var afterReply = engine.ApplyMove(new Move(opponentReply), afterLead.State);
+
+        Assert.True(afterReply.TrickCompleted);
+        Assert.Equal(24, afterReply.State.PlayerOnePoints);
+        Assert.Equal(0, afterReply.State.PlayerTwoPoints);
+    }
+
+    [Fact]
+    public void GetLegalMoves_ClosedPhase_LeadingWithMarriagePair_ShouldAllowMarriage()
+    {
+        var engine = new GameEngine();
+        var state = engine.CurrentState;
+
+        state.IsClosed = true;
+        state.PlayerOneHand.Clear();
+        state.PlayerTwoHand.Clear();
+        state.CurrentTrick.Clear();
+        state.SetPlayerTurn(0);
+
+        var suit = Enum.GetValues<Suit>().First();
+        var queen = new Card { Suit = suit, Type = Rank.Queen };
+        var king = new Card { Suit = suit, Type = Rank.King };
+        state.PlayerOneHand.Add(queen);
+        state.PlayerOneHand.Add(king);
 
         var legalMoves = engine.GetLegalMoves(state).ToList();
-        var move = legalMoves.First();
-        engine.ApplyMove(move, state);
 
-        // Player 1 turn
-        var legalMovesReply = engine.GetLegalMoves(state).ToList();
-        var replyMove = legalMoves.First();
-        engine.ApplyMove(move, state);
+        Assert.Contains(legalMoves, m => m.Card == queen && m.DeclareMarriage);
+        Assert.Contains(legalMoves, m => m.Card == king && m.DeclareMarriage);
+    }
 
+    [Fact]
+    public void GetLegalMoves_TalonExhausted_LeadingWithMarriagePair_ShouldAllowMarriage()
+    {
+        var engine = new GameEngine();
+        var state = engine.CurrentState;
 
+        state.PlayerOneHand.Clear();
+        state.PlayerTwoHand.Clear();
+        state.CurrentTrick.Clear();
+        state.SetPlayerTurn(0);
+        state.Talon.Cards.Clear();
+        state.TrumpCard = null;
+
+        var suit = Enum.GetValues<Suit>().First();
+        var queen = new Card { Suit = suit, Type = Rank.Queen };
+        var king = new Card { Suit = suit, Type = Rank.King };
+        state.PlayerOneHand.Add(queen);
+        state.PlayerOneHand.Add(king);
+
+        var legalMoves = engine.GetLegalMoves(state).ToList();
+
+        Assert.Contains(legalMoves, m => m.Card == queen && m.DeclareMarriage);
+        Assert.Contains(legalMoves, m => m.Card == king && m.DeclareMarriage);
+    }
+
+    [Fact]
+    public void GetLegalMoves_FirstLead_ShouldNotAllowCloseGame()
+    {
+        var engine = new GameEngine();
+        var state = engine.CurrentState;
+
+        state.PlayerOneHand.Clear();
+        state.PlayerTwoHand.Clear();
+        state.CurrentTrick.Clear();
+        state.SetPlayerTurn(0);
+
+        var card = new Card { Suit = Suit.Clubs, Type = Rank.Nine };
+        state.PlayerOneHand.Add(card);
+
+        var legalMoves = engine.GetLegalMoves(state).ToList();
+
+        Assert.DoesNotContain(legalMoves, m => m.CloseGame);
     }
 }
 

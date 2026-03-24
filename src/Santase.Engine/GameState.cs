@@ -28,6 +28,8 @@ public class GameState
 
     public int PlayerOnePoints { get; set; }
     public int PlayerTwoPoints { get; set; }
+    public HashSet<Suit> PlayerOneDeclaredMarriages { get; init; } = [];
+    public HashSet<Suit> PlayerTwoDeclaredMarriages { get; init; } = [];
 
     /// <summary>
     /// Value 0 if player 1,
@@ -79,6 +81,8 @@ public class GameState
             CurrentTrick = [.. CurrentTrick],
             PlayerOnePoints = PlayerOnePoints,
             PlayerTwoPoints = PlayerTwoPoints,
+            PlayerOneDeclaredMarriages = [.. PlayerOneDeclaredMarriages],
+            PlayerTwoDeclaredMarriages = [.. PlayerTwoDeclaredMarriages],
             PlayerTurn = PlayerTurn,
             IsClosed = IsClosed
         };
