@@ -28,6 +28,8 @@ public class GameState
 
     public int PlayerOnePoints { get; set; }
     public int PlayerTwoPoints { get; set; }
+    public HashSet<Suit> PlayerOneDeclaredMarriages { get; init; } = [];
+    public HashSet<Suit> PlayerTwoDeclaredMarriages { get; init; } = [];
 
     /// <summary>
     /// Value 0 if player 1,
@@ -41,6 +43,16 @@ public class GameState
     public void SwitchPlayer()
     {
         PlayerTurn = PlayerTurn == 1 ? 0 : 1;
+    }
+
+    public void SetPlayerTurn(int playerTurn)
+    {
+        if (playerTurn is not 0 and not 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(playerTurn), "Player turn must be 0 or 1.");
+        }
+
+        PlayerTurn = playerTurn;
     }
 
     public string GetStateString()
@@ -61,12 +73,16 @@ public class GameState
         {
             PlayerOneHand = [.. PlayerOneHand],
             PlayerTwoHand = [.. PlayerTwoHand],
+            PlayerOnePlayedCards = [.. PlayerOnePlayedCards],
+            PlayerTwoPlayedCards = [.. PlayerTwoPlayedCards],
             Talon = new Talon { Cards = [.. Talon.Cards] },
             TrumpSuit = TrumpSuit,
             TrumpCard = TrumpCard,
             CurrentTrick = [.. CurrentTrick],
             PlayerOnePoints = PlayerOnePoints,
             PlayerTwoPoints = PlayerTwoPoints,
+            PlayerOneDeclaredMarriages = [.. PlayerOneDeclaredMarriages],
+            PlayerTwoDeclaredMarriages = [.. PlayerTwoDeclaredMarriages],
             PlayerTurn = PlayerTurn,
             IsClosed = IsClosed
         };
